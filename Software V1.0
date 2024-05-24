@@ -1,0 +1,508 @@
+import jieba
+import re
+def read_txt(file_path):
+    with open(file_path, 'r', encoding='gbk') as file:
+        return file.read()
+def remove_punctuation_and_numbers(text):
+    text_no_punctuation = re.sub(r'[^\w\s]', '', text)  
+    text_no_numbers = re.sub(r'\d+', '', text_no_punctuation) 
+    return text_no_numbers
+def load_custom_words(file_path):
+    with open(file_path, 'r', encoding='gbk') as file:
+        custom_words = file.read().splitlines()
+    for word in custom_words:
+        jieba.add_word(word)
+def segment_text(text, filter_words):
+    text_no_punct_numbers = remove_punctuation_and_numbers(text)
+    seg_list = jieba.lcut(text_no_punct_numbers)
+    return [word for word in seg_list if word not in filter_words and word.strip() != '']
+policy_doc_path = 'D:\\gdbh python\\words\\中央.txt'  #此处“中央”可以替换为“东部、中部、西部、东北”
+custom_words_path = 'D:\\gdbh python\\words\\user.txt'  
+filter_words_path = 'D:\\gdbh python\\words\\filter.txt'  
+policy_text = read_txt(policy_doc_path)
+load_custom_words(custom_words_path)
+filter_words = set(read_txt(filter_words_path).split('\n'))
+segmented_words = segment_text(policy_text, filter_words)
+from collections import Counter
+def read_filter_words(file_path): 
+    with open(file_path, 'r', encoding='latin1') as file:
+        return set(file.read().splitlines())
+filter_words_path = 'D:\\gdbh python\\words\\highfreinvalid.txt'  
+highfreinvalid_words = read_filter_words(filter_words_path)
+filtered_segmented_words = [word for word in segmented_words if word not in highfreinvalid_words and len(word) > 1]
+word_freq = Counter(filtered_segmented_words)
+common_words = [word for word, freq in word_freq.most_common(100)]
+print(common_words)
+from collections import Counter
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
+filtered_segmented_words = [word for word in segmented_words if word not in highfreinvalid_words and len(word) > 1]
+words_to_exclude = {"建设", "保护", "耕地"}
+final_filtered_words = [word for word in filtered_segmented_words if word not in words_to_exclude]
+word_freq = Counter(final_filtered_words)
+top_100_words = word_freq.most_common(100)
+word_freq_dict = {word: freq for word, freq in top_100_words}
+wordcloud = WordCloud(font_path='C:\\Windows\\Fonts\\msyh.ttc', width=800, height=800,
+                      background_color='white').generate_from_frequencies(word_freq_dict)
+plt.figure(figsize=(8, 8), facecolor=None)
+plt.imshow(wordcloud)
+plt.axis("off")
+plt.tight_layout(pad=0)
+plt.show()
+import matplotlib.pyplot as plt 
+plt.rcParams['font.sans-serif'] = ['Microsoft YaHei'] 
+import networkx as nx
+import matplotlib.pyplot as plt
+from itertools import combinations
+from collections import Counter
+cooccurrence_counts = Counter()
+for word1, word2 in combinations(common_words, 2):
+    cooccurrence_counts[(word1, word2)] = sum(1 for seg_word in zip(segmented_words, segmented_words[1:]) if word1 in seg_word and word2 in seg_word)
+top_100_edges = cooccurrence_counts.most_common(100)
+G = nx.Graph()
+for edge, weight in top_100_edges:
+    G.add_edge(*edge, weight=weight)
+centrality = nx.degree_centrality(G)
+plt.figure(figsize=(12, 12))
+pos = nx.spring_layout(G, k=0.15, iterations=20)  
+nx.draw_networkx_nodes(G, pos, node_size=[v * 500 for v in centrality.values()]) 
+nx.draw_networkx_edges(G, pos, alpha=0.5)  
+nx.draw_networkx_labels(G, pos, font_size=8) 
+plt.show()
+
+2.LDA模型代码
+import os
+import pandas as pd
+import re
+import jieba 
+import jieba.posseg as psg
+import gensim
+from gensim.models import CoherenceModel
+from gensim import corpora, models
+import pyLDAvis.gensim_models as gensimvis
+import pyLDAvis
+import matplotlib.pyplot as plt
+import numpy as np
+output_path = 'D:/lda/result' 
+file_path = 'D:/lda/data' 
+os.chdir(file_path) 
+data=pd.read_excel("data.xlsx")
+os.chdir(output_path) 
+dic_file = "D:/lda/stop_dic/dict.txt" 
+stop_file = "D:/lda/stop_dic/stopwords.txt" 
+def chinese_word_cut(mytext):
+    jieba.load_userdict(dic_file)
+    jieba.initialize()
+    try:
+        stopword_list = open(stop_file,encoding ='utf-8')
+    except:
+        stopword_
+        list = []
+        print("error in stop_file")
+    stop_list = []
+    flag_list = ['n','nz','vn','v']
+    for line in stopword_list:
+        line = re.sub(u'\n|\\r', '', line)
+        stop_list.append(line)
+    word_list = []
+    seg_list = psg.cut(mytext)
+    for seg_word in seg_list:
+        word = re.sub(u'[^\u4e00-\u9fa5]','',seg_word.word)
+        find = 0
+        for stop_word in stop_list:
+            if stop_word == word or len(word)<2:    
+                    find = 1
+                    break
+        if find == 0 and seg_word.flag in flag_list:
+            word_list.append(word)      
+    return (" ").join(word_list)
+print(data.head())
+data["content_cutted"] = data.content.apply(chinese_word_cut)
+data.to_excel("processed_data.xlsx", index=False)
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn.decomposition import LatentDirichletAllocation
+def print_top_words(model, feature_names, n_top_words):
+    tword = [] 
+    for topic_idx, topic in enumerate(model.components_):
+        print("Topic #%d:" % topic_idx)
+        topic_w = " ".join([feature_names[i] for i in topic.argsort()[:-n_top_words - 1:-1]])
+        tword.append(topic_w)
+        print(topic_w)
+    return tword
+n_features = 100 
+tf_vectorizer = CountVectorizer(strip_accents = 'unicode',
+                                max_features=n_features,
+                                stop_words='english',
+                                max_df = 0.5,
+                                min_df = 5)
+tf = tf_vectorizer.fit_transform(data.content_cutted) 
+n_topics =4
+lda = LatentDirichletAllocation(n_components=n_topics, max_iter=50,  
+                                learning_method='batch',
+                                learning_offset=50,
+                                doc_topic_prior=0.1,
+                                topic_word_prior=0.01,
+                               random_state=0) 
+lda.fit(tf) 
+import matplotlib.pyplot as plt 
+plt.rcParams['font.sans-serif'] = ['SimSun']
+import numpy as np 
+topics=lda.transform(tf) 
+topic = [] 
+for t in topics: 
+    topic.append(list(t).index(np.max(t)))
+data['topic']=topic 
+data.to_excel("data_topic.xlsx",index=False) 
+topics[0]
+get_ipython().run_line_magic('matplotlib', 'inline')
+from gensim.models.ldamodel import LdaModel
+from gensim.corpora import Dictionary
+text_data = [text.split() for text in data['content_cutted']]
+gensim_dict = Dictionary(text_data)
+corpus = [gensim_dict.doc2bow(text) for text in text_data]
+gensim_lda = LdaModel(
+    corpus=corpus,  
+    id2word=gensim_dict,  
+    num_topics=n_topics,  
+    alpha='auto',  
+    eta='auto'  
+)
+vis = gensimvis.prepare(gensim_lda, corpus, dictionary=gensim_dict)
+pyLDAvis.display(vis)
+pyLDAvis.save_html(vis, 'lda_visualization.html')
+import matplotlib.pyplot as plt 
+plexs = [] 
+n_max_topics = 17
+for i in range(1,n_max_topics): 
+    print(i)
+    lda = LatentDirichletAllocation(n_components=i, max_iter=50,
+                                    learning_method='batch',
+                                    learning_offset=50,random_state=0)
+    lda.fit(tf) 
+    plexs.append(lda.perplexity(tf))
+n_t=16
+x=list(range(1,n_t)) 
+plt.plot(x,plexs[1:n_t]) 
+plt.xlabel("主题数量") 
+plt.ylabel("主题困惑度")  
+plt.title("主题困惑度随主题数量变化图")
+plt.show()  
+import matplotlib.pyplot as plt
+from gensim.models import CoherenceModel, LdaModel
+from gensim.corpora import Dictionary
+import numpy as np
+texts = [text.split() for text in data.content_cutted]
+dictionary = Dictionary(texts)
+corpus = [dictionary.doc2bow(text) for text in texts]
+coherence_values = [] 
+n_max_topics = 16
+for i in range(1, n_max_topics):
+    lda_model = LdaModel(corpus=corpus, id2word=dictionary, num_topics=i)
+    coherence_model_lda = CoherenceModel(model=lda_model, texts=texts, dictionary=dictionary, coherence='c_v')
+    coherence_lda = coherence_model_lda.get_coherence()
+    coherence_values.append(coherence_lda)
+n_t = 14
+x = list(range(1, n_t))
+plt.plot(x, coherence_values[1:n_t])
+plt.xlabel("主题数量")
+plt.ylabel("主题一致性值")
+plt.title("主题一致性随主题数量变化图")
+plt.show()
+
+3.TOT指数模型代码
+import tkinter as tk
+from tkinter import filedialog, messagebox, Menu, ttk, Toplevel, Label
+import pandas as pd
+import numpy as np
+import openpyxl  
+from openpyxl.utils.dataframe import dataframe_to_rows
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import sys
+import os
+class Tooltip:
+    def __init__(self, widget, text='Tooltip'):
+        self.widget = widget
+        self.text = text
+        self.tooltip_window = None
+    def enter(self, event=None):
+        x, y, cx, cy = self.widget.bbox("insert")
+        x += self.widget.winfo_rootx() + 25
+        y += self.widget.winfo_rooty() + 20
+        self.tooltip_window = Toplevel(self.widget)
+        self.tooltip_window.wm_overrideredirect(True)
+        self.tooltip_window.wm_geometry("+%d+%d" % (x, y))
+        label = Label(self.tooltip_window, text=self.text, justify='left',
+                      background='#ffffff', relief='solid', borderwidth=1,
+                      font=("times", "8", "normal"))
+        label.pack(ipadx=1)
+    def leave(self, event=None):
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+            self.tooltip_window = None
+class App:
+    def __init__(self, root):
+        self.root = root
+        self.setup_ui()
+        self.df = None  
+    def setup_ui(self):
+        self.root.title("TOT指数计算器 V1.0")
+        self.root.geometry('780x580')  
+        self.root.resizable(False, False)  
+        self.root.configure(bg='#f5f4f1')
+        content_frame = tk.Frame(self.root)
+        content_frame.pack(expand=True, fill="both")
+        button_bg_color = "#b6ccd8"
+        button_fg_color = "black"
+        content_frame.grid_columnconfigure(0, weight=1)
+        content_frame.grid_columnconfigure(1, weight=1)
+        content_frame.grid_columnconfigure(2, weight=1)
+        row_1_bg = tk.Frame(content_frame, bg='#d3d3d3', height=120)
+        row_1_bg.grid(row=0, column=0, columnspan=3, sticky='ew')
+        row_1_bg.grid_propagate(False)
+        label_in_row_1 = tk.Label(row_1_bg,
+                                  text="“主题-目标-工具(Topics-Objectives-Tools, TOT)”\n政策文本制定效果评价指数计算器",
+                                  font=("Microsoft YaHei",18),bg='#d3d3d3')
+        label_in_row_1.place(relx=0.5, rely=0.5, anchor='center')
+        developer_label = tk.Label(content_frame, text="开发者：张祚、侯文姣、刘晓歌", font=("KaiTi", 15))
+        developer_label.grid(row=1, column=0, columnspan=3, sticky='ew', padx=(10, 10), pady=(10, 10))
+        unit_label = tk.Label(content_frame, text="单位：华中师范大学公共管理学院", font=("KaiTi", 15))
+        unit_label.grid(row=2, column=0, columnspan=3, sticky='ew', padx=(10, 10), pady=(10, 10))
+        row_4_bg = tk.Frame(content_frame, bg='#d3d3d3', height=50)  
+        row_4_bg.grid(row=3, column=0, columnspan=3, sticky='ew')  
+        row_4_bg.grid_propagate(False) 
+        module_label = tk.Label(row_4_bg, text="计算模组", font=("SimSun", 15,"bold"), bg='#d3d3d3')
+        module_label.place(relx=0.17, rely=0.5, anchor='center')  
+        row_5_bg = tk.Frame(content_frame, bg='#d3d3d3', height=60)
+        row_5_bg.grid(row=4, column=0, columnspan=3, sticky='ew')  
+        row_5_bg.grid_propagate(False)  
+        row_5_bg.grid_columnconfigure(0, weight=1, uniform="group1")
+        row_5_bg.grid_columnconfigure(1, weight=1, uniform="group1")
+        row_5_bg.grid_columnconfigure(2, weight=1, uniform="group1")
+        btn_import_options = tk.Button(row_5_bg, text="Step1:导入", command=self.open_file_options, bg=button_bg_color,
+                                       fg=button_fg_color, padx=24, pady=8, font=("Microsoft YaHei", 11))
+        btn_import_options.grid(row=0, column=0, padx=(5, 5), pady=(0, 15))
+        btn_assign = tk.Button(row_5_bg, text="Step2:赋值", command=self.assign_values, bg=button_bg_color,
+                               fg=button_fg_color, padx=24, pady=8, font=("Microsoft YaHei", 11))
+        btn_assign.grid(row=0, column=1, padx=(5, 5), pady=(0, 15))
+        btn_calculate = tk.Button(row_5_bg, text="Step3:计算", command=self.calculate, bg=button_bg_color,
+                                  fg=button_fg_color, padx=24, pady=8, font=("Microsoft YaHei", 11))
+        btn_calculate.grid(row=0, column=2, padx=(5, 5), pady=(0, 15))
+        blank_row = tk.Frame(content_frame, height=35)  
+        blank_row.grid(row=5, column=0, columnspan=3, sticky='ew')
+        blank_row.grid_propagate(False)  
+        row_7_bg = tk.Frame(content_frame, bg='#d3d3d3', height=50)  
+        row_7_bg.grid(row=6, column=0, columnspan=3, sticky='ew')  
+        row_7_bg.grid_propagate(False)  
+        module_label = tk.Label(row_7_bg, text="绘图模组", font=("SimSun", 15,"bold"), bg='#d3d3d3')
+        module_label.place(relx=0.17, rely=0.5, anchor='center')  
+        row_8_bg = tk.Frame(content_frame, bg='#d3d3d3', height=60)
+        row_8_bg.grid(row=7, column=0, columnspan=3, sticky='ew')  
+        row_8_bg.grid_propagate(False)  
+        row_8_bg.grid_columnconfigure(0, weight=1, uniform="group1")
+        row_8_bg.grid_columnconfigure(1, weight=1, uniform="group1")
+        row_8_bg.grid_columnconfigure(2, weight=1, uniform="group1")
+        btn_plot_1d = tk.Button(row_8_bg, text="Step4:单维绘图", command=self.plot_single_dimension, bg=button_bg_color,
+                                fg=button_fg_color, padx=9, pady=8, font=("Microsoft YaHei", 11))
+        btn_plot_1d.grid(row=0, column=0, padx=(5, 5), pady=(0, 25))
+        btn_plot_2d = tk.Button(row_8_bg, text="Step5:二维绘图", command=self.plot_two_dimension, bg=button_bg_color,
+                                fg=button_fg_color, padx=9, pady=8, font=("Microsoft YaHei", 11))
+        btn_plot_2d.grid(row=0, column=1, padx=(5, 5), pady=(0, 25))
+        btn_plot_3d = tk.Button(row_8_bg, text="Step6:三维绘图", command=self.plot_three_dimension, bg=button_bg_color,
+                                fg=button_fg_color, padx=9, pady=8, font=("Microsoft YaHei", 11))
+        btn_plot_3d.grid(row=0, column=2, padx=(5, 5), pady=(0, 25))
+        development_time_label = tk.Label(content_frame, text="开发时间：2024.3.6", font=("KaiTi", 12))
+        development_time_label.grid(row=8, column=0, columnspan=3, sticky='ew', padx=10, pady=(40, 5))
+        software_info_button = tk.Button(content_frame, text="软件说明", font=("Microsoft YaHei", 8),command=self.show_software_info)
+        software_info_button.grid(row=9, column=2, sticky='se', padx=20, pady=(5, 5))
+    def show_software_info(self):
+        software_info = """
+      一、本计算器的“导入”按钮提供两种选项。选择1可导入论文“央地视角下耕地保护政策文本量化评价：基于“主题-目标-工具”框架的分析”中的数据，选择2则允许用户自行加载数据。为确保本软件能够正确处理您的数据，请遵循以下Excel文件格式要求：
+      （一）第一行：政策编号
+       从第四列开始代表一个不同的政策（P1、P2、P3等）。
+      （二）前三列：分别代表一级变量、二级变量和三级变量的名称
+       1、第一列（一级变量）：描述政策的主题或其他（例如，“X政策主题”）。
+       2、第二列（二级变量）：提供更具体的政策方面（例如，“X1加强示范试点”）。
+       3、第三列（三级变量）：进一步细分政策的具体点，如果没有可标记为“无”。
+      （三）数据行
+       1、X数据：首4行包含与X政策主题相关的数据。
+       2、Y数据：接下来的3行包含与Y政策目标相关的数据。
+       3、Z数据：随后的14行包含与Z政策工具相关的具体数据。
+      二、赋值原理：根据每行有效数据的分位数范围，分别赋值为0,0.25,0.5,0.75和1；赋值详细说明请参考论文“央地视角下耕地保护政策文本量化评价：基于“主题-目标-工具”框架的分析”。
+      三、计算结果默认保存在当前TOT程序所在位置。计算的详细说明请参考论文“央地视角下耕地保护政策文本量化评价：基于“主题-目标-工具”框架的分析”。
+        """
+        tk.messagebox.showinfo("软件说明", software_info)
+    def open_file_options(self):
+        self.top = tk.Toplevel()
+        self.top.title("选择导入方式")
+        self.top.geometry('300x200')
+        label = tk.Label(self.top, text="请选择要导入的数据方式：", font=("Arial", 12))
+        label.pack(pady=10)
+        button1 = tk.Button(self.top, text="选择1：论文的实验数据", command=self.choose_option1)
+        button1.pack(pady=10)
+        button2 = tk.Button(self.top, text="选择2：计算机本地数据", command=self.choose_option2)
+        button2.pack(pady=10)
+    def choose_option1(self):
+        self.reset_df()  
+        if getattr(sys, 'frozen', False):
+            application_path = sys._MEIPASS
+        else:
+            application_path = os.path.dirname(os.path.abspath(__file__))
+        filename = os.path.join(application_path, 'TOT实验数据.xlsx')
+        try:
+            self.df = pd.read_excel(filename)
+            messagebox.showinfo("成功", "论文的实验数据已成功导入。")
+            self.top.destroy() 
+        except Exception as e:
+            messagebox.showerror("错误", f"导入论文的实验数据时出错：{e}")
+    def choose_option2(self):
+        self.reset_df()  
+        filename = filedialog.askopenfilename(title="选择文件", filetypes=[("Excel files", "*.xlsx;*.xls")])
+        if filename:
+            try:
+                self.df = pd.read_excel(filename)
+                messagebox.showinfo("提示", "计算机本地数据文件成功加载！")
+                self.top.destroy()  
+            except Exception as e:
+                messagebox.showerror("错误", f"导入计算机本地数据文件时出错：{e}")
+    def reset_df(self):
+        self.df = None  
+    def assign_values(self):
+        if self.df is not None:
+            data = self.df.iloc[:, 3:]  
+            assigned_data = data.apply(self.apply_rules, axis=1)
+            self.df = pd.concat([self.df.iloc[:, :3], assigned_data], axis=1)
+            self.save_to_excel(self.df, "赋值后数据.xlsx")
+            messagebox.showinfo("信息", "赋值完成并已保存")
+        else:
+            messagebox.showwarning("警告", "数据未加载，请先加载数据。")
+    def save_to_excel(self, df, file_name):
+        with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
+            workbook = writer.book
+            worksheet = writer.sheets['Sheet1']
+            for col in worksheet.columns:
+                max_length = max(len(str(cell.value)) for cell in col)
+                adjusted_width = (max_length + 2)
+worksheet.column_dimensions[col[0].column_letter].width = adjusted_width
+    def apply_rules(self, row):
+        quantiles = np.quantile(row.dropna(), [0.125, 0.375, 0.625, 0.875])
+        return row.apply(lambda x:
+                         0 if x <= quantiles[0] else
+                         0.25 if x <= quantiles[1] else
+                         0.5 if x <= quantiles[2] else
+                         0.75 if x <= quantiles[3] else
+                         1)
+    def display_data(self, df):
+        self.tree["columns"] = [f"Column_{i}" for i in range(len(df.columns))]
+        for i, col in enumerate(df.columns):
+            col_id = f"Column_{i}"
+            self.tree.heading(col_id, text=col)
+            self.tree.column(col_id, width=100, anchor='center')
+        for _, row in df.iterrows():
+            self.tree.insert("", "end", values=list(row))
+    def calculate(self):
+        if self.df is not None:
+            num_policies = len(self.df.columns) - 3
+            column_labels = ['得分类型'] + [f'P{i}' for i in range(1, num_policies + 1)]
+            results_df = pd.DataFrame(columns=column_labels)
+            results_df['得分类型'] = ['X得分', 'Y得分', 'Z1得分', 'Z2得分', 'Z3得分', 'Z得分', 'TOT结果']
+            for i in range(num_policies):  
+                col_data = self.df.iloc[:, i + 3]  
+                x_score = col_data.iloc[0:4].mean()
+                y_score = col_data.iloc[4:7].mean()
+                z1_score = col_data.iloc[7:11].mean()
+                z2_score = col_data.iloc[11:17].mean()
+                z3_score = col_data.iloc[17:23].mean()
+                z_score = np.mean([z1_score, z2_score, z3_score])
+                tot_score = x_score + y_score + z_score
+                results_df.loc[results_df['得分类型'] == 'X得分', f'P{i + 1}'] = x_score
+                results_df.loc[results_df['得分类型'] == 'Y得分', f'P{i + 1}'] = y_score
+                results_df.loc[results_df['得分类型'] == 'Z1得分', f'P{i + 1}'] = z1_score
+                results_df.loc[results_df['得分类型'] == 'Z2得分', f'P{i + 1}'] = z2_score
+                results_df.loc[results_df['得分类型'] == 'Z3得分', f'P{i + 1}'] = z3_score
+                results_df.loc[results_df['得分类型'] == 'Z得分', f'P{i + 1}'] = z_score
+                results_df.loc[results_df['得分类型'] == 'TOT结果', f'P{i + 1}'] = tot_score
+            results_df.to_excel("计算结果.xlsx", index=False)
+            messagebox.showinfo("信息", "计算完成并已保存")
+        else:
+            messagebox.showwarning("警告", "数据未加载，请先加载数据。")
+    def plot_single_dimension(self):
+        if self.df is None or self.df.empty:
+            messagebox.showwarning("警告", "数据未加载，请先加载数据。")
+            return
+        try:
+            results_df = pd.read_excel("计算结果.xlsx")
+            print("计算结果数据加载成功！")
+        except Exception as e:
+            print(f"加载计算结果数据时出错：{str(e)}")
+            return
+        plt.rcParams['font.sans-serif'] = ['SimHei'] 
+        plt.rcParams['axes.unicode_minus'] = False  
+        x_scores = results_df.loc[results_df['得分类型'] == 'X得分'].iloc[:, 1:].values.flatten()
+        y_scores = results_df.loc[results_df['得分类型'] == 'Y得分'].iloc[:, 1:].values.flatten()
+        z_scores = results_df.loc[results_df['得分类型'] == 'Z得分'].iloc[:, 1:].values.flatten()
+        tot_results = results_df.loc[results_df['得分类型'] == 'TOT结果'].iloc[:, 1:].values.flatten()
+        plt.figure(figsize=(10, 6))
+        plt.scatter(range(1, len(x_scores) + 1), x_scores, color='r', label='X得分')
+        plt.scatter(range(1, len(y_scores) + 1), y_scores, color='g', label='Y得分')
+        plt.scatter(range(1, len(z_scores) + 1), z_scores, color='b', label='Z得分')
+        plt.scatter(range(1, len(tot_results) + 1), tot_results, color='k', label='TOT结果')
+        plt.title('单维得分与TOT结果')
+        plt.xlabel('政策编号')
+        plt.ylabel('得分')
+        plt.legend()
+        plt.show()
+    def plot_two_dimension(self):
+        if self.df is not None:
+            try:
+                results_df = pd.read_excel("计算结果.xlsx")
+                print("计算结果数据加载成功！")
+            except Exception as e:
+                print(f"加载计算结果数据时出错：{str(e)}")
+                return
+            x_scores = results_df.loc[results_df['得分类型'] == 'X得分'].iloc[:, 1:].values.flatten()
+            y_scores = results_df.loc[results_df['得分类型'] == 'Y得分'].iloc[:, 1:].values.flatten()
+            z_scores = results_df.loc[results_df['得分类型'] == 'Z得分'].iloc[:, 1:].values.flatten()
+            tot_results = results_df.loc[results_df['得分类型'] == 'TOT结果'].iloc[:, 1:].values.flatten()
+            self.plot_bubble_chart_2d(x_scores, y_scores, tot_results, 'XY得分', 'X得分', 'Y得分')
+            self.plot_bubble_chart_2d(y_scores, z_scores, tot_results, 'YZ得分', 'Y得分', 'Z得分')
+            self.plot_bubble_chart_2d(x_scores, z_scores, tot_results, 'XZ得分', 'X得分', 'Z得分')
+        else:
+            messagebox.showwarning("警告", "数据未加载，请先加载数据。")
+    def plot_bubble_chart_2d(self, x_scores, y_scores, tot_results, title, x_label, y_label):
+        plt.figure(figsize=(10, 6))
+        plt.scatter(x_scores, y_scores, s=tot_results * 100, alpha=0.5)
+        plt.title('二维交叉分析')
+        plt.xlabel(x_label)
+        plt.ylabel(y_label)
+        plt.grid(True)
+        plt.show()
+    def plot_three_dimension(self):
+        if self.df is not None:
+            try:
+                results_df = pd.read_excel("计算结果.xlsx")
+                print("计算结果数据加载成功！")
+            except Exception as e:
+                print(f"加载计算结果数据时出错：{str(e)}")
+                return
+            x_scores = results_df.loc[results_df['得分类型'] == 'X得分'].iloc[:, 1:].values.flatten()
+            y_scores = results_df.loc[results_df['得分类型'] == 'Y得分'].iloc[:, 1:].values.flatten()
+            z_scores = results_df.loc[results_df['得分类型'] == 'Z得分'].iloc[:, 1:].values.flatten()
+            tot_results = results_df.loc[results_df['得分类型'] == 'TOT结果'].iloc[:, 1:].values.flatten()
+            self.plot_bubble_chart(x_scores, y_scores, z_scores, tot_results, 'XYZ得分', 'X得分', 'Y得分', 'Z得分')
+        else:
+            messagebox.showwarning("警告", "数据未加载，请先加载数据。")
+    def plot_bubble_chart(self, x_scores, y_scores, z_scores, tot_results, title, x_label, y_label, z_label):
+        fig = plt.figure(figsize=(10, 6))
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(x_scores, y_scores, z_scores, s=tot_results * 100, alpha=0.5)
+        ax.set_title('三维综合分析')
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+        ax.set_zlabel(z_label)
+        plt.show()
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = App(root)
+    root.mainloop()
